@@ -7,11 +7,10 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const dbPath = path.resolve(process.cwd(), "dev.db");
-  const adapter = new PrismaLibSql({
-    url: `file:${dbPath}?mode=rwc`,
-    authToken: "",
-  });
+  const dbUrl =
+    process.env.DATABASE_URL ??
+    `file:${path.resolve(process.cwd(), "dev.db")}`;
+  const adapter = new PrismaLibSql({ url: dbUrl });
   return new PrismaClient({ adapter });
 }
 
