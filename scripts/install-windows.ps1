@@ -21,7 +21,38 @@ Write-Host ""
 Write-Host "=== Orkestra -- Windows Agent Kurulum ===" -ForegroundColor Cyan
 Write-Host ""
 
-# -- 1. Rust ------------------------------------------------------------------
+# -- 1. MSVC Build Tools ------------------------------------------------------
+$linkExe = Get-Command link.exe -ErrorAction SilentlyContinue
+if (-not $linkExe) {
+    Write-Warn "MSVC Build Tools bulunamadi, kuruluyor (birkas dakika surebilir)..."
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id Microsoft.VisualStudio.2022.BuildTools -e --silent --accept-package-agreements `
+            --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+    } else {
+        $vsUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
+        $vsExe = "$env:TEMP\vs_BuildTools.exe"
+        Invoke-WebRequest -Uri $vsUrl -OutFile $vsExe
+        & $vsExe --quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended
+        Remove-Item $vsExe -ErrorAction SilentlyContinue
+    }
+    # PATH'e MSVC ekle
+    $vcPaths = @(
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
+        "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
+    )
+    foreach ($base in $vcPaths) {
+        if (Test-Path $base) {
+            $ver = (Get-ChildItem $base | Sort-Object Name -Descending | Select-Object -First 1).Name
+            $env:PATH = "$base\$ver\bin\Hostx64\x64;$env:PATH"
+            break
+        }
+    }
+    Write-Ok "MSVC Build Tools kuruldu"
+} else {
+    Write-Ok "MSVC linker mevcut: $($linkExe.Source)"
+}
+
+# -- 2. Rust ------------------------------------------------------------------
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Warn "Rust kuruluyor..."
