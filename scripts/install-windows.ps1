@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoUrl    = "https://github.com/erdodo/orkestra.git"
 $InstallDir = "$env:LOCALAPPDATA\Orkestra"
-$AgentBin   = "$InstallDir\agent\target\release\agent.exe"
+$AgentBin   = "$InstallDir\agent\target\x86_64-pc-windows-gnu\release\agent.exe"
 $TaskName   = "OrchestraAgent"
 $ServerUrl  = if ($env:ORKESTRA_SERVER) { $env:ORKESTRA_SERVER } else { "ws://192.168.1.50:3081/agent" }
 
@@ -21,64 +21,61 @@ Write-Host ""
 Write-Host "=== Orkestra -- Windows Agent Kurulum ===" -ForegroundColor Cyan
 Write-Host ""
 
-# -- 1. MSVC Build Tools ------------------------------------------------------
-$linkExe = Get-Command link.exe -ErrorAction SilentlyContinue
-if (-not $linkExe) {
-    Write-Warn "MSVC Build Tools bulunamadi, kuruluyor (birkas dakika surebilir)..."
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id Microsoft.VisualStudio.2022.BuildTools -e --silent --accept-package-agreements `
-            --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-    } else {
-        $vsUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
-        $vsExe = "$env:TEMP\vs_BuildTools.exe"
-        Invoke-WebRequest -Uri $vsUrl -OutFile $vsExe
-        & $vsExe --quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended
-        Remove-Item $vsExe -ErrorAction SilentlyContinue
-    }
-    # PATH'e MSVC ekle
-    $vcPaths = @(
-        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
-        "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
-    )
-    foreach ($base in $vcPaths) {
-        if (Test-Path $base) {
-            $ver = (Get-ChildItem $base | Sort-Object Name -Descending | Select-Object -First 1).Name
-            $env:PATH = "$base\$ver\bin\Hostx64\x64;$env:PATH"
-            break
-        }
-    }
-    Write-Ok "MSVC Build Tools kuruldu"
-} else {
-    Write-Ok "MSVC linker mevcut: $($linkExe.Source)"
-}
-
-# -- 2. Rust ------------------------------------------------------------------
+# -- 1. Rust (GNU toolchain -- yonetici yetkisi gerekmez) ---------------------
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Warn "Rust kuruluyor..."
     $rustupExe = "$env:TEMP\rustup-init.exe"
-    Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile $rustupExe
-    & $rustupExe -y --quiet
+    Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe" -OutFile $rustupExe
+    & $rustupExe -y --quiet --default-toolchain stable --default-host x86_64-pc-windows-gnu
     Remove-Item $rustupExe -ErrorAction SilentlyContinue
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
     [System.Environment]::SetEnvironmentVariable("PATH", "$env:USERPROFILE\.cargo\bin;" + [System.Environment]::GetEnvironmentVariable("PATH","User"), "User")
-    Write-Ok "Rust kuruldu"
+    Write-Ok "Rust kuruldu (GNU)"
 } else {
     Write-Ok "Rust: $(rustc --version)"
 }
 
-# -- 2. Git -------------------------------------------------------------------
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Warn "Git kuruluyor..."
-        winget install --id Git.Git -e --silent --accept-package-agreements
-        $env:PATH = "C:\Program Files\Git\cmd;$env:PATH"
+# -- 2. GNU linker (gcc) -- winget veya scoop ile kullanici dizinine ----------
+$gccOk = Get-Command gcc -ErrorAction SilentlyContinue
+if (-not $gccOk) {
+    Write-Warn "GCC (MinGW) kuruluyor..."
+
+    # Scoop varsa (kullanici yetkisiyle calisir)
+    if (Get-Command scoop -ErrorAction SilentlyContinue) {
+        scoop install mingw
     } else {
-        Write-Err "Git bulunamadi. https://git-scm.com adresinden kurun."
+        # Scoop'u once kur (kullanici dizinine, yonetici gerektirmez)
+        Write-Warn "Scoop kuruluyor..."
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+        scoop install mingw
     }
+    $env:PATH = "$env:USERPROFILE\scoop\apps\mingw\current\bin;$env:PATH"
+    Write-Ok "GCC kuruldu"
+} else {
+    Write-Ok "GCC mevcut: $($gccOk.Source)"
 }
 
-# -- 3. Repo klonla / guncelle ------------------------------------------------
+# Rust'in GNU target'ini aktif et
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+rustup target add x86_64-pc-windows-gnu 2>$null | Out-Null
+rustup toolchain install stable-x86_64-pc-windows-gnu --no-self-update 2>$null | Out-Null
+
+# -- 3. Git -------------------------------------------------------------------
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Warn "Git kuruluyor (scoop)..."
+    if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+    }
+    scoop install git
+    $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+}
+
+# -- 4. Repo klonla / guncelle ------------------------------------------------
 if (Test-Path "$InstallDir\.git") {
     Write-Warn "Guncelleniyor..."
     Push-Location $InstallDir
@@ -95,7 +92,7 @@ if (Test-Path "$InstallDir\.git") {
 Write-Ok "Agent derleniyor (bu birkas dakika surebilir)..."
 Push-Location "$InstallDir\agent"
 $ErrorActionPreference = "Continue"
-cargo build --release
+cargo build --release --target x86_64-pc-windows-gnu
 $buildExit = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 Pop-Location
