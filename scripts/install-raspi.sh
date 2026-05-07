@@ -34,6 +34,7 @@ info "Node.js $(node --version)"
 command -v git &>/dev/null || sudo apt-get install -y git
 
 # ── 3. Repo klonla / güncelle ────────────────────────────────────────────────
+FIRST_INSTALL=false
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   warn "Güncelleniyor..."
   sudo git -C "$INSTALL_DIR" pull --rebase
@@ -42,13 +43,18 @@ else
   sudo mkdir -p "$INSTALL_DIR"
   sudo chown "$CURRENT_USER:$CURRENT_USER" "$INSTALL_DIR"
   git clone "$REPO_URL" "$INSTALL_DIR"
+  FIRST_INSTALL=true
 fi
 
 cd "$INSTALL_DIR/server"
 
 # ── 4. Bağımlılıklar ────────────────────────────────────────────────────────
 info "npm bağımlılıkları..."
-npm ci 2>/dev/null || npm install
+if [[ "$FIRST_INSTALL" == true ]]; then
+  npm ci   # ilk kurulumda lockfile'a göre temiz kur
+else
+  npm install --prefer-offline  # güncellemede mevcut node_modules'u koru
+fi
 
 # ── 5. .env ──────────────────────────────────────────────────────────────────
 if [[ ! -f ".env" ]]; then
