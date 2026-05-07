@@ -1,29 +1,30 @@
 #!/usr/bin/env bash
 # Orkestra — Raspberry Pi Kurulum / Güncelleme Scripti
-# Kullanım: bash scripts/install-raspi.sh
-# Kuruluysa günceller ve yeniden başlatır.
+# Kullanım: bash scripts/install-raspi.sh   (sudo OLMADAN çalıştır)
+# /home/erdogan/orkestra altına kurar, yalnızca systemd için sudo ister.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/erdodo/orkestra.git"
-INSTALL_DIR="/opt/orkestra"
+INSTALL_DIR="$HOME/orkestra"
 SERVICE_NAME="orkestra"
 PORT=3081
 NODE_VERSION="22"
-CURRENT_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${GREEN}[✓]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+error() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
+
+[[ "$(id -u)" == "0" ]] && error "sudo olmadan çalıştır: bash scripts/install-raspi.sh"
 
 echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║       Orkestra — Raspi Kurulum       ║"
-echo "╚══════════════════════════════════════╝"
+echo "=== Orkestra — Raspi Kurulum ==="
+echo "Dizin: $INSTALL_DIR"
 echo ""
 
 # ── 1. Node.js ───────────────────────────────────────────────────────────────
-if ! command -v node &>/dev/null || [[ $(node -e "process.exit(parseInt(process.version.slice(1)) >= 22 ? 0 : 1)"; echo $?) -ne 0 ]]; then
+if ! command -v node &>/dev/null; then
   warn "Node.js $NODE_VERSION kuruluyor..."
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | sudo -E bash -
   sudo apt-get install -y nodejs
@@ -37,32 +38,26 @@ command -v git &>/dev/null || sudo apt-get install -y git
 FIRST_INSTALL=false
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   warn "Güncelleniyor..."
-  sudo git -C "$INSTALL_DIR" pull --rebase
+  git -C "$INSTALL_DIR" pull --rebase
 else
   warn "Klonlanıyor → $INSTALL_DIR"
-  sudo mkdir -p "$INSTALL_DIR"
-  sudo chown "$CURRENT_USER:$CURRENT_USER" "$INSTALL_DIR"
   git clone "$REPO_URL" "$INSTALL_DIR"
   FIRST_INSTALL=true
 fi
 
 cd "$INSTALL_DIR/server"
 
-# ── 4. Bağımlılıklar ────────────────────────────────────────────────────────
+# ── 4. Bağımlılıklar ─────────────────────────────────────────────────────────
 info "npm bağımlılıkları..."
 if [[ "$FIRST_INSTALL" == true ]]; then
-  npm ci   # ilk kurulumda lockfile'a göre temiz kur
+  npm ci
 else
-  npm install --prefer-offline  # güncellemede mevcut node_modules'u koru
+  npm install --prefer-offline
 fi
 
 # ── 5. .env ──────────────────────────────────────────────────────────────────
 if [[ ! -f ".env" ]]; then
-  if [[ -f ".env.example" ]]; then
-    cp .env.example .env
-  else
-    printf 'DATABASE_URL="file:./dev.db"\nPORT=%s\nNODE_ENV=production\n' "$PORT" > .env
-  fi
+  printf 'DATABASE_URL="file:./dev.db"\nPORT=%s\nNODE_ENV=production\n' "$PORT" > .env
   info ".env oluşturuldu"
 fi
 grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$PORT/" .env || echo "PORT=$PORT" >> .env
@@ -71,10 +66,7 @@ grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$PORT/" .env || echo "PORT=$POR
 info "Veritabanı migration..."
 node node_modules/.bin/prisma migrate deploy
 
-# DB dosyası root'a ait olabilir, servis kullanıcısına ver
-sudo chown "$CURRENT_USER:$CURRENT_USER" dev.db 2>/dev/null || true
-
-# ── 7. Build ─────────────────────────────────────────────────────────────────
+# ── 7. Prisma generate + Build ───────────────────────────────────────────────
 info "Prisma client üretiliyor..."
 node node_modules/.bin/prisma generate
 
@@ -83,6 +75,7 @@ npm run build
 
 # ── 8. systemd ───────────────────────────────────────────────────────────────
 NODE_BIN="$(which node)"
+CURRENT_USER="$(whoami)"
 
 sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << EOF
 [Unit]
@@ -119,12 +112,10 @@ command -v ufw &>/dev/null && sudo ufw allow "$PORT/tcp" comment "Orkestra" 2>/d
 
 # ── Özet ─────────────────────────────────────────────────────────────────────
 echo ""
-echo "╔═════════════════════════════════════════════╗"
-echo "║            Kurulum Tamamlandı!              ║"
-echo "╠═════════════════════════════════════════════╣"
-printf "║  Yerel:  http://192.168.1.50:%-16s║\n" "${PORT}/dashboard"
-printf "║  WAN:    http://orkestra.erdoganyesil.org:%-5s║\n" "${PORT}/dashboard"
-printf "║  Log:    sudo journalctl -u orkestra -f     ║\n"
-echo "╚═════════════════════════════════════════════╝"
+echo "=== Kurulum Tamamlandı! ==="
+echo "  Yerel : http://192.168.1.50:${PORT}/dashboard"
+echo "  WAN   : http://orkestra.erdoganyesil.org:${PORT}/dashboard"
+echo "  Log   : journalctl -u orkestra -f"
+echo "  Dizin : $INSTALL_DIR"
 echo ""
 info "Servis: $(sudo systemctl is-active $SERVICE_NAME)"
