@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Device {
+  id         String   @id @default(cuid())
+  hostname   String   @unique
+  platform   String
+  localIp    String?
+  apiKey     String   @unique @default(cuid())
+  online     Boolean  @default(false)
+  cpu        Float    @default(0)
+  ram        Float    @default(0)
+  vpnActive  Boolean  @default(false)
+  proxyPort  Int?
+  rustdeskId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sessions    Session[]
+  syncJobsA   SyncJob[]    @relation("SourceDevice")
+  syncJobsB   SyncJob[]    @relation("TargetDevice")
+  proxyConfig ProxyConfig?
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  deviceId  String
+  type      String
+  data      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  device    Device   @relation(fields: [deviceId], references: [id])
+}
+
+model SyncJob {
+  id         String   @id @default(cuid())
+  mutagenId  String?
+  sourceId   String
+  targetId   String
+  sourcePath String
+  targetPath String
+  status     String   @default("idle")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  source     Device   @relation("SourceDevice", fields: [sourceId], references: [id])
+  target     Device   @relation("TargetDevice", fields: [targetId], references: [id])
+}
+
+model ProxyConfig {
+  id        String  @id @default(cuid())
+  deviceId  String  @unique
+  enabled   Boolean @default(false)
+  proxyHost String?
+  proxyPort Int?
+  proxyType String  @default("socks5")
+  device    Device  @relation(fields: [deviceId], references: [id])
+}
