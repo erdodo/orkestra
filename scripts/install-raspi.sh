@@ -72,6 +72,9 @@ info "Veritabanı migration..."
 node node_modules/.bin/prisma migrate deploy
 
 # ── 7. Build ─────────────────────────────────────────────────────────────────
+info "Prisma client üretiliyor..."
+node node_modules/.bin/prisma generate
+
 info "Next.js build alınıyor..."
 npm run build
 
