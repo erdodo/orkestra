@@ -51,7 +51,14 @@ info "npm bağımlılıkları..."
 npm ci 2>/dev/null || npm install
 
 # ── 5. .env ──────────────────────────────────────────────────────────────────
-[[ -f ".env" ]] || cp .env.example .env
+if [[ ! -f ".env" ]]; then
+  if [[ -f ".env.example" ]]; then
+    cp .env.example .env
+  else
+    printf 'DATABASE_URL="file:./dev.db"\nPORT=%s\nNODE_ENV=production\n' "$PORT" > .env
+  fi
+  info ".env oluşturuldu"
+fi
 grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$PORT/" .env || echo "PORT=$PORT" >> .env
 
 # ── 6. Veritabanı ────────────────────────────────────────────────────────────

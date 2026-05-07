@@ -3,6 +3,7 @@ server/node_modules/
 server/.next/
 server/*.db
 server/.env
+!server/.env.example
 
 # Rust
 agent/target/
