@@ -1,12 +1,13 @@
 # Orkestra — Windows Agent Kurulum / Güncelleme Scripti
 # Yönetici olarak çalıştırın:
-#   PowerShell -ExecutionPolicy Bypass -File install-windows.ps1
+#   PowerShell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+# WAN sunucusu için: $env:ORKESTRA_SERVER="ws://orkestra.erdoganyesil.org:3081/agent" önceden set edin.
 # Kuruluysa günceller ve yeniden başlatır.
 
 #Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
 
-$RepoUrl    = "git@github.com:erdodo/orkestra.git"
+$RepoUrl    = "https://github.com/erdodo/orkestra.git"
 $InstallDir = "$env:LOCALAPPDATA\Orkestra"
 $AgentBin   = "$InstallDir\agent\target\release\agent.exe"
 $TaskName   = "OrchestraAgent"
