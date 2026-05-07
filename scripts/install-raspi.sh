@@ -10,7 +10,7 @@ INSTALL_DIR="/opt/orkestra"
 SERVICE_NAME="orkestra"
 PORT=3081
 NODE_VERSION="22"
-CURRENT_USER="${SUDO_USER:-pi}"
+CURRENT_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info() { echo -e "${GREEN}[✓]${NC} $1"; }
@@ -70,6 +70,9 @@ grep -q "^PORT=" .env && sed -i "s/^PORT=.*/PORT=$PORT/" .env || echo "PORT=$POR
 # ── 6. Veritabanı ────────────────────────────────────────────────────────────
 info "Veritabanı migration..."
 node node_modules/.bin/prisma migrate deploy
+
+# DB dosyası root'a ait olabilir, servis kullanıcısına ver
+sudo chown "$CURRENT_USER:$CURRENT_USER" dev.db 2>/dev/null || true
 
 # ── 7. Build ─────────────────────────────────────────────────────────────────
 info "Prisma client üretiliyor..."
