@@ -116,19 +116,25 @@ export default function DashboardPage() {
   }, []);
 
   async function sendCommand(deviceId: string, cmd: string, payload?: string) {
-    await fetch("/api/command", {
+    console.log("[UI] sendCommand:", { deviceId, cmd, payload });
+    const res = await fetch("/api/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device_id: deviceId, cmd, payload }),
     });
+    const data = await res.json();
+    console.log("[UI] sendCommand sonuç:", res.status, data);
   }
 
   async function handleProxy(sourceId: string, targetId: string, action: "enable" | "disable") {
-    await fetch("/api/proxy", {
+    console.log("[UI] handleProxy:", { sourceId, targetId, action });
+    const res = await fetch("/api/proxy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source_device_id: sourceId, target_device_id: targetId, action }),
     });
+    const data = await res.json();
+    console.log("[UI] handleProxy sonuç:", res.status, data);
   }
 
   async function handleAudio(sourceId: string, targetId: string, action: "start" | "stop") {
@@ -140,11 +146,14 @@ export default function DashboardPage() {
   }
 
   async function handleTunnel(deviceId: string, action: "start" | "stop") {
-    await fetch("/api/tunnel", {
+    console.log("[UI] handleTunnel:", { deviceId, action });
+    const res = await fetch("/api/tunnel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device_id: deviceId, action }),
     });
+    const data = await res.json();
+    console.log("[UI] handleTunnel sonuç:", res.status, data);
   }
 
   async function handleDevSession(config: {
